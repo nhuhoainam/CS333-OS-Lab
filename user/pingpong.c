@@ -5,20 +5,38 @@
 void
 main()
 {
-	int p[2];
+	int p1[2], p2[2];
+	pipe(p1);
+	pipe(p2);
 	char buff[5];
-	pipe(p);
-	if(fork() == 0)
-	{
-		read(p[0], buff, 5);
-		printf("%d: received ping\n", getpid());
-		write(p[1], "pong", 4);
-	}
-	else
-	{
-		write(p[1], "ping", 4);
+	int pid = fork();
+	if (pid == 0) {
+		close(p1[1]);
+		close(p2[0]);
+		read(p1[0], buff, 5);
+		printf("%d: received ", getpid());
+		for (int i = 0; i < 4; i++) {
+			printf("%c", buff[i]);
+		}
+		printf("\n");
+		write(p2[1], "pong", 4);
+		close(p1[0]);
+		close(p2[1]);
+		exit(0);
+	} else {
+		close(p1[0]);
+		close(p2[1]);
+		write(p1[1], "ping", 4);
 		wait(0);
-		read(p[0], buff, 5);
-		printf("%d: received pong\n", getpid());
+		read(p2[0], buff, 5);
+		printf("%d: received ", getpid());
+		for (int i = 0; i < 4; i++) {
+			printf("%c", buff[i]);
+		}
+		printf("\n");
+		close(p1[1]);
+		close(p2[0]);
+		exit(0);
 	}
+	
 }
