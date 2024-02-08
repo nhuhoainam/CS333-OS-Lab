@@ -1,0 +1,260 @@
+diff --git a/Makefile b/Makefile
+index 365c91b..c5697b0 100644
+--- a/Makefile
++++ b/Makefile
+@@ -188,7 +188,11 @@ UPROGS=\
+ 	$U/_grind\
+ 	$U/_wc\
+ 	$U/_zombie\
+-
++	$U/_sleep\
++	$U/_pingpong\
++	$U/_primes\
++	$U/_find\
++	$U/_xargs\
+ 
+ 
+ 
+diff --git a/user/find.c b/user/find.c
+new file mode 100644
+index 0000000..5baf4b8
+--- /dev/null
++++ b/user/find.c
+@@ -0,0 +1,77 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++#include "kernel/fs.h"
++#include "kernel/fcntl.h"
++
++char*
++fmtname(char *path)
++{
++  static char buf[DIRSIZ+1];
++  char *p;
++
++  // Find first character after last slash.
++  for(p=path+strlen(path); p >= path && *p != '/'; p--)
++    ;
++  p++;
++
++  // Return blank-padded name.
++  if(strlen(p) >= DIRSIZ)
++    return p;
++  memmove(buf, p, strlen(p));
++  memset(buf+strlen(p), ' ', DIRSIZ-strlen(p));
++  return buf;
++}
++
++void find(char* path, char* matcher) {
++    char buf[512], *p;
++    int fd;
++    struct dirent de;
++    struct stat st;
++
++    if ((fd = open(path, O_RDONLY)) < 0) {
++        fprintf(2, "ls: cannot open %s\n", path);
++        return;
++    }
++
++    if(fstat(fd, &st) < 0){
++        fprintf(2, "ls: cannot stat outer %s\n", path);
++        close(fd);
++        return;
++    }
++
++    switch (st.type) {
++    case T_DEVICE:
++    case T_FILE:
++        close(fd);
++        break;
++
++    case T_DIR:
++        while(read(fd, &de, sizeof(de)) == sizeof(de)) {
++            if (strcmp(de.name, ".") == 0 || strcmp(de.name, "..") == 0) continue;
++            if (de.inum == 0)
++                continue;
++            strcpy(buf, path);
++            p = buf + strlen(buf);
++            *p++ = '/';
++            memmove(p, de.name, DIRSIZ);
++            p[DIRSIZ] = 0;
++            if (strcmp(de.name, matcher) == 0) {
++                printf("%s\n", buf);
++            }
++            find(buf, matcher);
++        }
++        close(fd);
++        break;
++    }
++}
++
++int main(int argc, char* argv[]) {
++    if (argc < 3) {
++        exit(0);
++    }
++    for (int i = 2; i < argc; i++) {
++        find(argv[1], argv[i]);
++    }
++    return 0;
++}
+\ No newline at end of file
+diff --git a/user/pingpong.c b/user/pingpong.c
+new file mode 100644
+index 0000000..95a81e8
+--- /dev/null
++++ b/user/pingpong.c
+@@ -0,0 +1,42 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++void
++main()
++{
++	int p1[2], p2[2];
++	pipe(p1);
++	pipe(p2);
++	char buff[5];
++	int pid = fork();
++	if (pid == 0) {
++		close(p1[1]);
++		close(p2[0]);
++		read(p1[0], buff, 5);
++		printf("%d: received ", getpid());
++		for (int i = 0; i < 4; i++) {
++			printf("%c", buff[i]);
++		}
++		printf("\n");
++		write(p2[1], "pong", 4);
++		close(p1[0]);
++		close(p2[1]);
++		exit(0);
++	} else {
++		close(p1[0]);
++		close(p2[1]);
++		write(p1[1], "ping", 4);
++		wait(0);
++		read(p2[0], buff, 5);
++		printf("%d: received ", getpid());
++		for (int i = 0; i < 4; i++) {
++			printf("%c", buff[i]);
++		}
++		printf("\n");
++		close(p1[1]);
++		close(p2[0]);
++		exit(0);
++	}
++	
++}
+\ No newline at end of file
+diff --git a/user/primes.c b/user/primes.c
+new file mode 100644
+index 0000000..019d318
+--- /dev/null
++++ b/user/primes.c
+@@ -0,0 +1,38 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++void prime(int *p) {
++    int pid = fork();
++    if (pid > 0) {
++        wait(0);
++    } else if (pid == 0) {
++        int pr;
++        if (read(p[0], &pr, 4) == 4) {
++            printf("prime %d\n", pr);
++            int n;
++            int new_p[2];
++            pipe(new_p);
++            while (read(p[0], &n, 4) == 4) {
++                if (n % pr) {
++                    write(new_p[1], &n, 4);
++                }
++            }
++            close(new_p[1]);
++            prime(new_p);
++        }
++    }
++}
++
++int main() {
++    int p[2];
++
++    pipe(p);
++    for (int i = 2; i <= 35; i++) {
++        write(p[1], &i, 4);        
++    }
++    close(p[1]);
++    prime(p);
++
++    return 0;
++}
+\ No newline at end of file
+diff --git a/user/sleep.c b/user/sleep.c
+new file mode 100644
+index 0000000..26ecf79
+--- /dev/null
++++ b/user/sleep.c
+@@ -0,0 +1,14 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++int
++main(int argc, char *argv[])
++{
++  if(argc != 2){
++    fprintf(2, "usage: sleep ticks\n");
++    exit(1);
++  }
++  sleep(atoi(argv[1]) * 10);
++  exit(0);
++}
+\ No newline at end of file
+diff --git a/user/xargs.c b/user/xargs.c
+new file mode 100644
+index 0000000..af619de
+--- /dev/null
++++ b/user/xargs.c
+@@ -0,0 +1,37 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++#include "kernel/param.h"
++
++int main(int argc, char*argv[]) {
++    char ch;
++    char* xargv[MAXARG];
++    char buf[512], *p = buf;
++    int xargc = argc;
++    for (int i = 0; i < argc; i++)
++        xargv[i] = argv[i + 1];
++    while (read(0, &ch, 1) == 1) {
++        if (ch == ' ') {
++            xargv[xargc++ - 1] = buf;
++        }
++        if (ch == '\n') {
++            xargv[xargc++ - 1] = buf;
++            int pid = fork();
++            if (pid > 0) {
++                wait(0);
++                memset(buf, 0, sizeof(buf));
++                p = buf;
++                xargc = argc;
++                for (int i = argc; i < MAXARG; i++) {
++                    xargv[i] = 0;
++                }
++                continue;
++            } else {
++                exec(xargv[0], xargv);
++            }
++        }
++        *p++ = ch;
++    }
++
++    return 0;
++}
+\ No newline at end of file
