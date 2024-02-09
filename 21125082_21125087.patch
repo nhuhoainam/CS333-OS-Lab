@@ -205,10 +205,10 @@ index 0000000..26ecf79
 \ No newline at end of file
 diff --git a/user/xargs.c b/user/xargs.c
 new file mode 100644
-index 0000000..af619de
+index 0000000..1b2db05
 --- /dev/null
 +++ b/user/xargs.c
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,40 @@
 +#include "kernel/types.h"
 +#include "kernel/stat.h"
 +#include "user/user.h"
@@ -224,6 +224,9 @@ index 0000000..af619de
 +    while (read(0, &ch, 1) == 1) {
 +        if (ch == ' ') {
 +            xargv[xargc++ - 1] = buf;
++            memset(buf, 0, sizeof(buf));
++            p = buf;
++            continue;
 +        }
 +        if (ch == '\n') {
 +            xargv[xargc++ - 1] = buf;
