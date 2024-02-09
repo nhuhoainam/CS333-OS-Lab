@@ -13,6 +13,9 @@ int main(int argc, char*argv[]) {
     while (read(0, &ch, 1) == 1) {
         if (ch == ' ') {
             xargv[xargc++ - 1] = buf;
+            memset(buf, 0, sizeof(buf));
+            p = buf;
+            continue;
         }
         if (ch == '\n') {
             xargv[xargc++ - 1] = buf;
