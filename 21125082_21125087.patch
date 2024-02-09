@@ -15,36 +15,25 @@ index 365c91b..c5697b0 100644
  
  
  
+diff --git a/time.txt b/time.txt
+new file mode 100644
+index 0000000..9a03714
+--- /dev/null
++++ b/time.txt
+@@ -0,0 +1 @@
++10
+\ No newline at end of file
 diff --git a/user/find.c b/user/find.c
 new file mode 100644
-index 0000000..5baf4b8
+index 0000000..47ee823
 --- /dev/null
 +++ b/user/find.c
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,58 @@
 +#include "kernel/types.h"
 +#include "kernel/stat.h"
 +#include "user/user.h"
 +#include "kernel/fs.h"
 +#include "kernel/fcntl.h"
-+
-+char*
-+fmtname(char *path)
-+{
-+  static char buf[DIRSIZ+1];
-+  char *p;
-+
-+  // Find first character after last slash.
-+  for(p=path+strlen(path); p >= path && *p != '/'; p--)
-+    ;
-+  p++;
-+
-+  // Return blank-padded name.
-+  if(strlen(p) >= DIRSIZ)
-+    return p;
-+  memmove(buf, p, strlen(p));
-+  memset(buf+strlen(p), ' ', DIRSIZ-strlen(p));
-+  return buf;
-+}
 +
 +void find(char* path, char* matcher) {
 +    char buf[512], *p;
