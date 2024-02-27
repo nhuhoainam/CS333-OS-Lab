@@ -1,0 +1,22 @@
+Question 1:
+usertrap() function called `syscall`.
+
+Question 2:
+The value of p->trapframe->a7 is 0x7.
+This value represents the system call number for SYS_exec. (defined in syscall.h)
+
+Question 3:
+sstatus = 0x22 (0000 0000 0000 0000 0000 0000 0010 0010)
+The 8th bit of sstatus is SPP, which is 0. This means that the previous privilege mode is user mode.
+
+Question 4:
+The assembly instruction the kernel is panicing at is:
+    800020d6:	00002903          	lw	s2,0(zero) # 0 <_entry-0x80000000>
+Register s2 corresponds to the variable num.
+
+Question 5:
+The address 0 is not mapped in the kernel's address space. This is shown by the scause, which stands for page fault caused by a read.
+
+Question 6:
+The name of the binary that was running when the kernel panicked is `initcode`.
+Its process id is 1.
