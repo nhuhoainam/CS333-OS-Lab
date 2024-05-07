@@ -93,3 +93,33 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64 sys_sigalarm(void) {
+  int interval;
+  uint64 handler;
+  struct proc *p = myproc();
+
+  argint(0, &interval);
+  argaddr(1, &handler);
+
+  p->alarm_interval = interval;
+  p->ticks_elapsed = interval;
+  p->alarm_handler = (void (*)(void))handler;
+
+  return 0;
+}
+
+uint64 sys_sigreturn(void) {
+  struct proc *p = myproc();
+
+  // p->trapframe->kernel_satp = p->alarm_state->kernel_satp;
+  // p->trapframe->kernel_sp = p->alarm_state->kernel_sp;
+  // p->trapframe->kernel_trap = p->alarm_state->kernel_trap;
+  // p->trapframe->epc = p->alarm_state->epc;
+  // p->trapframe->kernel_hartid = p->alarm_state->kernel_hartid;
+  // p->trapframe->a0 = p->alarm_state->a0;
+  *(p->trapframe) = *(p->alarm_state);
+  p->is_alarming = 0;
+
+  return p->trapframe->a0;
+}
