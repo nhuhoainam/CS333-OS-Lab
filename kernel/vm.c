@@ -5,6 +5,7 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
 
 /*
  * the kernel's page table.
@@ -314,8 +315,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
   pte_t *pte;
   uint64 pa, i;
-  uint flags;
-  char *mem;
+  uint flags;  
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -324,13 +324,21 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
-      goto err;
+    if (flags & PTE_W) {
+      *pte |= PTE_COW;
+      *pte &= ~PTE_W;
+      flags = PTE_FLAGS(*pte);
     }
+    if(mappages(new, i, PGSIZE, (uint64)pa, flags) != 0)
+      goto err;
+    // if (PTE_FLAGS(*pte) & PTE_W) {
+    //   *pte |= PTE_COW;
+    //   *pte &= ~PTE_W;
+    // }
+
+    acquire(&ref_c.lock);
+    ref_c.pte_ref[pa/PGSIZE]++;
+    release(&ref_c.lock);
   }
   return 0;
 
@@ -358,26 +366,66 @@ uvmclear(pagetable_t pagetable, uint64 va)
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
-  uint64 n, va0, pa0;
   pte_t *pte;
+  char *new_pa;
+  uint64 flags;
+  uint64 n, va0, pa0;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+
     if(va0 >= MAXVA)
       return -1;
-    pte = walk(pagetable, va0, 0);
-    if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0 ||
-       (*pte & PTE_W) == 0)
-      return -1;
-    pa0 = PTE2PA(*pte);
-    n = PGSIZE - (dstva - va0);
-    if(n > len)
-      n = len;
-    memmove((void *)(pa0 + (dstva - va0)), src, n);
 
-    len -= n;
-    src += n;
-    dstva = va0 + PGSIZE;
+    if(dstva >= MAXVA)
+      return -1;
+
+    if((pte = walk(pagetable, va0, 0)) == 0)
+      return -1;
+
+    if((*pte & PTE_V) == 0)
+      return -1;
+
+    if((*pte & PTE_U) == 0)
+      return -1;
+
+    if((*pte & PTE_W) == 0 && (*pte & PTE_COW) == 0)
+      return -1;
+
+    pa0 = PTE2PA(*pte);
+
+    if(((*pte) & PTE_W) == 0)
+    {
+      if((new_pa = kalloc()) == 0)
+        return -1;
+
+      memmove(new_pa, (char*)pa0, PGSIZE);
+      flags = PTE_FLAGS(*pte);
+      *pte = PA2PTE(new_pa);
+      *pte |= flags;
+      *pte &= ~PTE_COW;
+      *pte |= PTE_W;
+
+      kfree((void*)pa0);
+
+      n = PGSIZE - (dstva - va0);
+      if(n > len)
+        n = len;
+      memmove((void *)(new_pa + (dstva - va0)), src, n);
+
+      len -= n;
+      src += n;
+      dstva = va0 + PGSIZE;
+    } else {
+      n = PGSIZE - (dstva - va0);
+      if(n > len)
+        n = len;
+      memmove((void *)(pa0 + (dstva - va0)), src, n);
+
+      len -= n;
+      src += n;
+      dstva = va0 + PGSIZE;
+    }
   }
   return 0;
 }
